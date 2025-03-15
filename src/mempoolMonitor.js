@@ -12,29 +12,44 @@ const alchemy = new Alchemy(config);
 async function startMempoolMonitor() {
   console.log('🚀 Mempool-Überwachung gestartet...');
 
-  // RICHTIGER EVENTNAME → "alchemy_pendingTransaction"
-  alchemy.ws.on("alchemy_pendingTransaction", (tx) => {
-    console.log(`💡 Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
+  // Verbindung zuerst sicherstellen!
+  try {
+    await alchemy.ws.isConnected();
 
-    if (tx.gasPrice) {
-      console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
-    }
+    console.log("✅ WebSocket-Verbindung aufgebaut");
 
-    if (tx.to) {
-      console.log(`➡️ Empfängeradresse: ${tx.to}`);
-    }
+    // Verfügbare Events ausgeben
+    console.log('👉 Verfügbare Events:', Object.keys(alchemy.ws._events || {}));
 
-    if (tx.value) {
-      console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
-    }
-  });
+    // Event aktivieren → "alchemy_newPendingTransactions" als sicheren Test nehmen
+    alchemy.ws.on("alchemy_newPendingTransactions", (tx) => {
+      console.log(`💡 Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
 
-  // Fehler-Handling direkt hinzufügen
-  alchemy.ws.on("error", (error) => {
-    console.error(`❌ Fehler im Event-Stream: ${error.message}`);
-  });
+      if (tx.gasPrice) {
+        console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
+      }
+
+      if (tx.to) {
+        console.log(`➡️ Empfängeradresse: ${tx.to}`);
+      }
+
+      if (tx.value) {
+        console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
+      }
+    });
+
+    // Fehler-Handling hinzufügen
+    alchemy.ws.on("error", (error) => {
+      console.error(`❌ Fehler im Event-Stream: ${error.message}`);
+    });
+
+  } catch (error) {
+    console.error(`❌ Verbindung fehlgeschlagen: ${error.message}`);
+  }
 }
 
 startMempoolMonitor();
+
+
 
 
