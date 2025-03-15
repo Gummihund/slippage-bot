@@ -12,7 +12,7 @@ const alchemy = new Alchemy(config);
 async function startMempoolMonitor() {
   console.log('🚀 Mempool-Überwachung gestartet...');
 
-  // Aktuelles Event für Pending Transactions in alchemy-sdk
+  // RICHTIGER EVENTNAME → "alchemy_pendingTransaction"
   alchemy.ws.on("alchemy_pendingTransaction", (tx) => {
     console.log(`💡 Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
 
@@ -36,4 +36,5 @@ async function startMempoolMonitor() {
 }
 
 startMempoolMonitor();
+
 
