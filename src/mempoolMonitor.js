@@ -26,22 +26,32 @@ async function startMempoolMonitor() {
       }
     }, 2000);
 
-    // Event aktivieren → Sicheren Event verwenden
-    alchemy.ws.on("alchemy_newPendingTransactions", (tx) => {
-      console.log(`💡 Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
+    // ✅ ALTERNATIVE EVENT-NAMEN TESTEN
+    const eventNames = [
+      "alchemy_newPendingTransactions", // Wahrscheinlich die richtige Schreibweise ✅
+      "alchemy_filteredPendingTransactions",
+      "alchemy_newFullPendingTransactions",
+      "pending"
+    ];
 
-      if (tx.gasPrice) {
-        console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
-      }
+    // 🔥 Direkt alle Events durchtesten
+    for (const eventName of eventNames) {
+      alchemy.ws.on(eventName, (tx) => {
+        console.log(`💡 [${eventName}] Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
 
-      if (tx.to) {
-        console.log(`➡️ Empfängeradresse: ${tx.to}`);
-      }
+        if (tx.gasPrice) {
+          console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
+        }
 
-      if (tx.value) {
-        console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
-      }
-    });
+        if (tx.to) {
+          console.log(`➡️ Empfängeradresse: ${tx.to}`);
+        }
+
+        if (tx.value) {
+          console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
+        }
+      });
+    }
 
     // Fehler-Handling hinzufügen
     alchemy.ws.on("error", (error) => {
