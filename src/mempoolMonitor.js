@@ -4,17 +4,20 @@ const ethers = require('ethers');
 
 const config = {
   apiKey: process.env.ALCHEMY_API_KEY,
-  network: Network.ETH_SEPOLIA,
+  network: Network.ETH_GOERLI, // 🚀 Direkt auf Goerli umstellen
+  timeout: 5000, // 5 Sekunden Timeout
+  maxRetries: 5
 };
 
 const alchemy = new Alchemy(config);
 
 async function startMempoolMonitor() {
-  console.log('🚀 Mempool-Überwachung gestartet...');
+  console.log('🚀 Mempool-Überwachung gestartet auf Goerli...');
 
   try {
-    // Verbindung explizit aufbauen → Lazy-Connection vermeiden!
     console.log("⚡️ Initialisiere WebSocket-Verbindung...");
+    
+    // Direkt die Verbindung prüfen und neue Blöcke loggen
     alchemy.ws.on("block", (blockNumber) => {
       console.log(`✅ Verbindung steht – Neuer Block: ${blockNumber}`);
     });
@@ -22,7 +25,6 @@ async function startMempoolMonitor() {
     // 🔥 Auf 'pending' hören und Details nachladen
     alchemy.ws.on("pending", async (txHash) => {
       try {
-        // 🚀 Hol die vollständigen Transaktionsdetails
         const tx = await alchemy.core.getTransaction(txHash);
 
         if (tx) {
@@ -70,6 +72,7 @@ async function startMempoolMonitor() {
 }
 
 startMempoolMonitor();
+
 
 
 
