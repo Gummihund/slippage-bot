@@ -28,10 +28,29 @@ async function startMempoolMonitor() {
         if (tx) {
           console.log(`💡 Neue TX erkannt: ${tx.hash}`);
           console.log(`➡️ Von: ${tx.from}`);
-          console.log(`➡️ Zu: ${tx.to}`);
-          console.log(`💰 Betrag: ${ethers.utils.formatEther(tx.value)} ETH`);
-          console.log(`⛽️ Gaspreis: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
-          console.log(`🔥 Max Fee Per Gas: ${tx.maxFeePerGas ? ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei') : 'n/a'} Gwei`);
+          console.log(`➡️ Zu: ${tx.to || '❌ (Kein Empfänger)'}`);
+
+          // ✅ Wert nur loggen, wenn vorhanden
+          if (tx.value) {
+            console.log(`💰 Betrag: ${ethers.utils.formatEther(tx.value)} ETH`);
+          } else {
+            console.log(`💰 Betrag: ❌ Kein Wert (Contract Call?)`);
+          }
+
+          // ✅ Gaspreis prüfen
+          if (tx.gasPrice) {
+            console.log(`⛽️ Gaspreis: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
+          } else {
+            console.log(`⛽️ Gaspreis: ❌ Nicht verfügbar`);
+          }
+
+          // ✅ Max Fee per Gas prüfen
+          if (tx.maxFeePerGas) {
+            console.log(`🔥 Max Fee Per Gas: ${ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei')} Gwei`);
+          } else {
+            console.log(`🔥 Max Fee Per Gas: ❌ Nicht verfügbar`);
+          }
+
           console.log(`🔋 Nonce: ${tx.nonce}`);
           console.log('-----------------------------------');
         }
@@ -51,6 +70,7 @@ async function startMempoolMonitor() {
 }
 
 startMempoolMonitor();
+
 
 
 
