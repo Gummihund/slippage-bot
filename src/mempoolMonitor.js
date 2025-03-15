@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Alchemy, Network, AlchemySubscription } = require('alchemy-sdk');
+const { Alchemy, Network } = require('alchemy-sdk');
 const ethers = require('ethers');
 
 const config = {
@@ -19,47 +19,26 @@ async function startMempoolMonitor() {
       console.log(`✅ Verbindung steht – Neuer Block: ${blockNumber}`);
     });
 
-    // 🔥 HARDCORE-Debug-Log → Alle verfügbaren Events auflisten
-    setTimeout(() => {
-      if (alchemy.ws._events) {
-        console.log('👉 Verfügbare Events:', Object.keys(alchemy.ws._events));
-      } else {
-        console.log('❌ Keine Events registriert!');
+    // 🔥 Auf 'pending' hören und Details nachladen
+    alchemy.ws.on("pending", async (txHash) => {
+      try {
+        // 🚀 Hol die vollständigen Transaktionsdetails
+        const tx = await alchemy.core.getTransaction(txHash);
+
+        if (tx) {
+          console.log(`💡 Neue TX erkannt: ${tx.hash}`);
+          console.log(`➡️ Von: ${tx.from}`);
+          console.log(`➡️ Zu: ${tx.to}`);
+          console.log(`💰 Betrag: ${ethers.utils.formatEther(tx.value)} ETH`);
+          console.log(`⛽️ Gaspreis: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
+          console.log(`🔥 Max Fee Per Gas: ${tx.maxFeePerGas ? ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei') : 'n/a'} Gwei`);
+          console.log(`🔋 Nonce: ${tx.nonce}`);
+          console.log('-----------------------------------');
+        }
+      } catch (error) {
+        console.error(`❌ Fehler beim Laden der Transaktionsdetails: ${error.message}`);
       }
-
-      if (alchemy.ws._websocket) {
-        console.log(`✅ WebSocket Status: ${alchemy.ws._websocket.readyState}`);
-      } else {
-        console.log("❌ WebSocket ist nicht initialisiert!");
-      }
-    }, 3000);
-
-    // ✅ TEST: Direkt auf verschiedene Varianten hören:
-    const eventNames = [
-      "alchemy_pendingTransactions", // Case-sensitive Variante
-      "alchemy_pendingtransactions", // Klein geschrieben (wie im Error)
-      "pending", // Allgemeine Pending-Transactions
-      "alchemy_newPendingTransactions"
-    ];
-
-    for (const eventName of eventNames) {
-      console.log(`🔎 Teste Event: ${eventName}`);
-      alchemy.ws.on(eventName, (tx) => {
-        console.log(`💡 [${eventName}] Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
-
-        if (tx.gasPrice) {
-          console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
-        }
-
-        if (tx.to) {
-          console.log(`➡️ Empfängeradresse: ${tx.to}`);
-        }
-
-        if (tx.value) {
-          console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
-        }
-      });
-    }
+    });
 
     // Fehler-Handling direkt hinzufügen
     alchemy.ws.on("error", (error) => {
@@ -72,6 +51,7 @@ async function startMempoolMonitor() {
 }
 
 startMempoolMonitor();
+
 
 
 
