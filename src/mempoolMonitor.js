@@ -12,12 +12,28 @@ const alchemy = new Alchemy(config);
 async function startMempoolMonitor() {
   console.log('🚀 Mempool-Überwachung gestartet...');
 
-  // Event für Pending Transactions überwachen
-  alchemy.ws.on('pendingTransactions', (tx) => {
+  // Aktuelles Event für Pending Transactions in alchemy-sdk
+  alchemy.ws.on("alchemy_pendingTransaction", (tx) => {
+    console.log(`💡 Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
+
     if (tx.gasPrice) {
-      console.log(`⛽️ Hoher Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
+      console.log(`⛽️ Gaspreis erkannt: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
     }
+
+    if (tx.to) {
+      console.log(`➡️ Empfängeradresse: ${tx.to}`);
+    }
+
+    if (tx.value) {
+      console.log(`💰 Überweisungsbetrag: ${ethers.utils.formatUnits(tx.value, 'ether')} ETH`);
+    }
+  });
+
+  // Fehler-Handling direkt hinzufügen
+  alchemy.ws.on("error", (error) => {
+    console.error(`❌ Fehler im Event-Stream: ${error.message}`);
   });
 }
 
 startMempoolMonitor();
+
