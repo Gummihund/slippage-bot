@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Alchemy, Network } = require('alchemy-sdk');
+const { Alchemy, Network, AlchemySubscription } = require('alchemy-sdk');
 const ethers = require('ethers');
 
 const config = {
@@ -19,23 +19,31 @@ async function startMempoolMonitor() {
       console.log(`✅ Verbindung steht – Neuer Block: ${blockNumber}`);
     });
 
-    // Sobald die Verbindung steht → Events auflisten
+    // 🔥 HARDCORE-Debug-Log → Alle verfügbaren Events auflisten
     setTimeout(() => {
       if (alchemy.ws._events) {
         console.log('👉 Verfügbare Events:', Object.keys(alchemy.ws._events));
+      } else {
+        console.log('❌ Keine Events registriert!');
       }
-    }, 2000);
 
-    // ✅ ALTERNATIVE EVENT-NAMEN TESTEN
+      if (alchemy.ws._websocket) {
+        console.log(`✅ WebSocket Status: ${alchemy.ws._websocket.readyState}`);
+      } else {
+        console.log("❌ WebSocket ist nicht initialisiert!");
+      }
+    }, 3000);
+
+    // ✅ TEST: Direkt auf verschiedene Varianten hören:
     const eventNames = [
-      "alchemy_newPendingTransactions", // Wahrscheinlich die richtige Schreibweise ✅
-      "alchemy_filteredPendingTransactions",
-      "alchemy_newFullPendingTransactions",
-      "pending"
+      "alchemy_pendingTransactions", // Case-sensitive Variante
+      "alchemy_pendingtransactions", // Klein geschrieben (wie im Error)
+      "pending", // Allgemeine Pending-Transactions
+      "alchemy_newPendingTransactions"
     ];
 
-    // 🔥 Direkt alle Events durchtesten
     for (const eventName of eventNames) {
+      console.log(`🔎 Teste Event: ${eventName}`);
       alchemy.ws.on(eventName, (tx) => {
         console.log(`💡 [${eventName}] Neue TX erkannt: ${JSON.stringify(tx, null, 2)}`);
 
@@ -53,7 +61,7 @@ async function startMempoolMonitor() {
       });
     }
 
-    // Fehler-Handling hinzufügen
+    // Fehler-Handling direkt hinzufügen
     alchemy.ws.on("error", (error) => {
       console.error(`❌ Fehler im Event-Stream: ${error.message}`);
     });
@@ -64,6 +72,7 @@ async function startMempoolMonitor() {
 }
 
 startMempoolMonitor();
+
 
 
 
