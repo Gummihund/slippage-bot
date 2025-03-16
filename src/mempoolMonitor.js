@@ -1,79 +1,112 @@
-require('dotenv').config();
-const { Alchemy, Network } = require('alchemy-sdk');
-const ethers = require('ethers');
+import dotenv from 'dotenv';
+import { ethers } from 'ethers';
+import TelegramBot from 'node-telegram-bot-api';
+import PQueue from 'p-queue';
 
-const config = {
-  apiKey: process.env.ALCHEMY_API_KEY,
-  network: Network.ETH_GOERLI, // 🚀 Direkt auf Goerli umstellen
-  timeout: 5000, // 5 Sekunden Timeout
-  maxRetries: 5
-};
+dotenv.config();
 
-const alchemy = new Alchemy(config);
+const {
+  ETHEREUM_ALCHEMY_URL,
+  ETHEREUM_QUICKNODE_URL,
+  POLYGON_ALCHEMY_URL,
+  ARBITRUM_ALCHEMY_URL,
+  BNB_ALCHEMY_URL,
+  WALLET_PRIVATE_KEY,
+  TARGET_ADDRESS,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_CHAT_ID
+} = process.env;
 
-async function startMempoolMonitor() {
-  console.log('🚀 Mempool-Überwachung gestartet auf Goerli...');
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
+const MIN_AMOUNT = ethers.parseEther('0.002');
+const queue = new PQueue({ concurrency: 5 });
 
+const NETWORKS = [
+  { name: "Ethereum Mainnet (Alchemy)", url: ETHEREUM_ALCHEMY_URL, websocket: true },
+  { name: "Ethereum Mainnet (QuickNode)", url: ETHEREUM_QUICKNODE_URL, websocket: true },
+  { name: "Polygon Mainnet (Alchemy)", url: POLYGON_ALCHEMY_URL, websocket: true },
+  { name: "BNB Smart Chain (Alchemy)", url: process.env.BNB_ALCHEMY_URL, websocket: false },
+  { name: "Arbitrum One (Alchemy)", url: ARBITRUM_ALCHEMY_URL, websocket: false },
+];
+
+async function performArbitrage(tx, provider, networkName) {
   try {
-    console.log("⚡️ Initialisiere WebSocket-Verbindung...");
-    
-    // Direkt die Verbindung prüfen und neue Blöcke loggen
-    alchemy.ws.on("block", (blockNumber) => {
-      console.log(`✅ Verbindung steht – Neuer Block: ${blockNumber}`);
+    const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
+    const gasPrice = (await provider.getFeeData()).gasPrice;
+
+    const transaction = await wallet.sendTransaction({
+      to: TARGET_ADDRESS,
+      value: tx.value,
+      gasPrice,
+      gasLimit: 21000,
     });
 
-    // 🔥 Auf 'pending' hören und Details nachladen
-    alchemy.ws.on("pending", async (txHash) => {
-      try {
-        const tx = await alchemy.core.getTransaction(txHash);
-
-        if (tx) {
-          console.log(`💡 Neue TX erkannt: ${tx.hash}`);
-          console.log(`➡️ Von: ${tx.from}`);
-          console.log(`➡️ Zu: ${tx.to || '❌ (Kein Empfänger)'}`);
-
-          // ✅ Wert nur loggen, wenn vorhanden
-          if (tx.value) {
-            console.log(`💰 Betrag: ${ethers.utils.formatEther(tx.value)} ETH`);
-          } else {
-            console.log(`💰 Betrag: ❌ Kein Wert (Contract Call?)`);
-          }
-
-          // ✅ Gaspreis prüfen
-          if (tx.gasPrice) {
-            console.log(`⛽️ Gaspreis: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei`);
-          } else {
-            console.log(`⛽️ Gaspreis: ❌ Nicht verfügbar`);
-          }
-
-          // ✅ Max Fee per Gas prüfen
-          if (tx.maxFeePerGas) {
-            console.log(`🔥 Max Fee Per Gas: ${ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei')} Gwei`);
-          } else {
-            console.log(`🔥 Max Fee Per Gas: ❌ Nicht verfügbar`);
-          }
-
-          console.log(`🔋 Nonce: ${tx.nonce}`);
-          console.log('-----------------------------------');
-        }
-      } catch (error) {
-        console.error(`❌ Fehler beim Laden der Transaktionsdetails: ${error.message}`);
-      }
-    });
-
-    // Fehler-Handling direkt hinzufügen
-    alchemy.ws.on("error", (error) => {
-      console.error(`❌ Fehler im Event-Stream: ${error.message}`);
-    });
-
+    await bot.sendMessage(TELEGRAM_CHAT_ID, `[${networkName}] ✅ Arbitrage erfolgreich: ${transaction.hash}`);
+    console.log(`[${networkName}] ✅ Arbitrage erfolgreich: ${transaction.hash}`);
   } catch (error) {
-    console.error(`❌ Verbindung fehlgeschlagen: ${error.message}`);
+    await bot.sendMessage(TELEGRAM_CHAT_ID, `[${networkName}] ❌ Arbitrage fehlgeschlagen: ${error.message}`);
+    console.error(`[${networkName}] ❌ Arbitrage fehlgeschlagen: ${error.message}`);
   }
 }
 
-startMempoolMonitor();
+async function monitorWebsocket(network) {
+  const provider = new ethers.WebSocketProvider(network.url);
+  provider.on("pending", (txHash) => {
+    queue.add(async () => {
+      try {
+        const tx = await provider.getTransaction(txHash);
+        if (tx && tx.to && tx.value && ethers.getBigInt(tx.value) >= MIN_AMOUNT) {
+          await performArbitrage(tx, provider, network.name);
+        }
+      } catch (error) {
+        console.error(`[${network.name}] Fehler: ${error.message}`);
+      }
+    });
+  });
 
+  provider.websocket.on("error", (err) =>
+    console.error(`[${network.name}] WS-Fehler:`, err.message)
+  );
 
+  provider.websocket.on("close", () =>
+    console.log(`[${network.name}] WS geschlossen.`)
+  );
+
+  console.log(`🚀 Monitoring gestartet auf: ${network.name}`);
+}
+
+async function monitorPolling(network) {
+  const provider = new ethers.JsonRpcProvider(network.url);
+  let lastBlock = await provider.getBlockNumber();
+
+  setInterval(async () => {
+    try {
+      const currentBlock = await provider.getBlockNumber();
+      if (currentBlock > lastBlock) {
+        const block = await provider.getBlock(currentBlock, true);
+        for (const tx of block.transactions) {
+          if (tx.to && tx.value && ethers.getBigInt(tx.value) >= MIN_AMOUNT) {
+            await performArbitrage(tx, provider, network.name);
+          }
+        }
+        lastBlock = currentBlock;
+      }
+    } catch (error) {
+      console.error(`[${network.name}] Block-Fehler: ${error.message}`);
+    }
+  }, 5000);
+  console.log(`🚀 Monitoring gestartet auf: ${network.name}`);
+}
+
+NETWORKS.forEach(network => {
+  if (network.websocket) {
+    monitorWebsocket(network);
+  } else {
+    monitorPolling(network);
+  }
+});
+
+console.log("🤖 Multi-Netzwerk Arbitrage-Bot gestartet!");
 
 
 
